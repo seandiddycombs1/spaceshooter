@@ -1,0 +1,369 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Space Shooter (飞机大战)</title>
+    <style>
+        body {
+            margin: 0;
+            overflow: hidden;
+            background: #000;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+            font-family: Arial, sans-serif;
+        }
+        #game {
+            position: relative;
+            width: 800px;
+            height: 600px;
+            background: url('data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" width="800" height="600" viewBox="0 0 800 600"><rect width="800" height="600" fill="%23000066"/><circle cx="400" cy="300" r="200" fill="%23000033"/></svg>');
+            overflow: hidden;
+        }
+        #player {
+            position: absolute;
+            width: 40px;
+            height: 40px;
+            background: url('data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 40 40"><path d="M20 0 L40 40 L20 30 L0 40 Z" fill="%23fff"/></svg>');
+        }
+        .enemy {
+            position: absolute;
+            width: 30px;
+            height: 30px;
+            background: url('data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 30 30"><path d="M15 0 L30 30 L15 20 L0 30 Z" fill="%23ff0000"/></svg>');
+            transform: rotate(180deg);
+        }
+        .bullet {
+            position: absolute;
+            width: 4px;
+            height: 10px;
+            background: #fff;
+            border-radius: 2px;
+        }
+        .explosion {
+            position: absolute;
+            width: 30px;
+            height: 30px;
+            animation: explode 0.5s forwards;
+        }
+        @keyframes explode {
+            0% { transform: scale(1); opacity: 1; }
+            100% { transform: scale(2); opacity: 0; }
+        }
+        #score {
+            position: absolute;
+            top: 20px;
+            left: 20px;
+            color: white;
+            font-size: 24px;
+        }
+        #level {
+            position: absolute;
+            top: 20px;
+            right: 20px;
+            color: white;
+            font-size: 24px;
+        }
+        #health {
+            position: absolute;
+            top: 60px;
+            left: 20px;
+            color: white;
+            font-size: 24px;
+        }
+        .powerup {
+            position: absolute;
+            width: 20px;
+            height: 20px;
+            background: gold;
+            border-radius: 50%;
+            animation: pulse 1s infinite;
+        }
+        @keyframes pulse {
+            0% { transform: scale(1); }
+            50% { transform: scale(1.2); }
+            100% { transform: scale(1); }
+        }
+    </style>
+</head>
+<body>
+    <div id="game">
+        <div id="player"></div>
+        <div id="score">Score: 0</div>
+        <div id="level">Level: 1</div>
+        <div id="health">Health: 100</div>
+    </div>
+
+    <script>
+        const game = document.getElementById('game');
+        const player = document.getElementById('player');
+        const scoreElement = document.getElementById('score');
+        const levelElement = document.getElementById('level');
+        const healthElement = document.getElementById('health');
+
+        // Game state
+        let playerPos = { x: 380, y: 500 };
+        let bullets = [];
+        let enemies = [];
+        let powerups = [];
+        let score = 0;
+        let level = 1;
+        let health = 100;
+        let gameLoop;
+        let enemySpawnRate = 1500;
+        let lastEnemySpawn = 0;
+        let powerupSpawnRate = 10000;
+        let lastPowerupSpawn = 0;
+
+        // Sound effects
+        function createSound(frequency, duration, type = 'square', volume = 0.1) {
+            const audioContext = new (window.AudioContext || window.webkitAudioContext)();
+            const oscillator = audioContext.createOscillator();
+            const gainNode = audioContext.createGain();
+            
+            oscillator.type = type;
+            oscillator.frequency.setValueAtTime(frequency, audioContext.currentTime);
+            
+            gainNode.gain.setValueAtTime(volume, audioContext.currentTime);
+            gainNode.gain.exponentialRampToValueAtTime(0.01, audioContext.currentTime + duration);
+            
+            oscillator.connect(gainNode);
+            gainNode.connect(audioContext.destination);
+            
+            oscillator.start();
+            setTimeout(() => {
+                oscillator.stop();
+                audioContext.close();
+            }, duration * 1000);
+        }
+
+        // Player movement
+        const keys = {};
+        document.addEventListener('keydown', e => keys[e.key] = true);
+        document.addEventListener('keyup', e => keys[e.key] = false);
+
+        // Shooting
+        document.addEventListener('keydown', e => {
+            if (e.code === 'Space' && health > 0) {
+                createBullet();
+                createSound(400, 0.1, 'square', 0.05);
+            }
+        });
+
+        function createBullet() {
+            const bullet = document.createElement('div');
+            bullet.className = 'bullet';
+            bullet.style.left = (playerPos.x + 18) + 'px';
+            bullet.style.top = playerPos.y + 'px';
+            game.appendChild(bullet);
+            bullets.push({
+                element: bullet,
+                x: playerPos.x + 18,
+                y: playerPos.y
+            });
+        }
+
+        function createEnemy() {
+            const enemy = document.createElement('div');
+            enemy.className = 'enemy';
+            const x = Math.random() * (game.offsetWidth - 30);
+            enemy.style.left = x + 'px';
+            enemy.style.top = '0px';
+            game.appendChild(enemy);
+            enemies.push({
+                element: enemy,
+                x: x,
+                y: 0,
+                health: 2
+            });
+        }
+
+        function createPowerup() {
+            const powerup = document.createElement('div');
+            powerup.className = 'powerup';
+            const x = Math.random() * (game.offsetWidth - 20);
+            const y = Math.random() * 300;
+            powerup.style.left = x + 'px';
+            powerup.style.top = y + 'px';
+            game.appendChild(powerup);
+            powerups.push({
+                element: powerup,
+                x: x,
+                y: y
+            });
+        }
+
+        function createExplosion(x, y) {
+            const explosion = document.createElement('div');
+            explosion.className = 'explosion';
+            explosion.style.left = x + 'px';
+            explosion.style.top = y + 'px';
+            explosion.style.background = 'radial-gradient(circle, yellow, orange, red)';
+            game.appendChild(explosion);
+            setTimeout(() => game.removeChild(explosion), 500);
+            createSound(100, 0.3, 'sawtooth', 0.1);
+        }
+
+        function nextLevel() {
+            level++;
+            levelElement.textContent = Level: ${level};
+            enemySpawnRate = Math.max(500, 1500 - level * 100);
+            createSound(600, 0.5, 'sine', 0.2);
+            
+            // Clear existing enemies
+            enemies.forEach(enemy => game.removeChild(enemy.element));
+            enemies = [];
+            
+            // Clear existing powerups
+            powerups.forEach(powerup => game.removeChild(powerup.element));
+            powerups = [];
+            
+            // Reset player position
+            playerPos = { x: 380, y: 500 };
+            health = 100;
+            healthElement.textContent = Health: ${health};
+        }
+
+        function checkCollisions() {
+            // Bullet-Enemy collisions
+            bullets.forEach((bullet, bulletIndex) => {
+                enemies.forEach((enemy, enemyIndex) => {
+                    if (bullet.x < enemy.x + 30 &&
+                        bullet.x + 4 > enemy.x &&
+                        bullet.y < enemy.y + 30 &&
+                        bullet.y + 10 > enemy.y) {
+                        
+                        enemy.health--;
+                        if (enemy.health <= 0) {
+                            createExplosion(enemy.x, enemy.y);
+                            game.removeChild(enemy.element);
+                            enemies.splice(enemyIndex, 1);
+                            score += 100;
+                            scoreElement.textContent = Score: ${score};
+                        }
+                        
+                        game.removeChild(bullet.element);
+                        bullets.splice(bulletIndex, 1);
+                        
+                        // Check win condition
+                        if (score >= level * 1000) {
+                            nextLevel();
+                        }
+                    }
+                });
+            });
+
+            // Player-Enemy collisions
+            enemies.forEach((enemy, index) => {
+                if (playerPos.x < enemy.x + 30 &&
+                    playerPos.x + 40 > enemy.x &&
+                    playerPos.y < enemy.y + 30 &&
+                    playerPos.y + 40 > enemy.y) {
+                    
+                    health -= 20;
+                    healthElement.textContent = Health: ${health};
+                    createExplosion(enemy.x, enemy.y);
+                    game.removeChild(enemy.element);
+                    enemies.splice(index, 1);
+                    
+                    if (health <= 0) {
+                        createSound(200, 1, 'sawtooth', 0.2);
+                        setTimeout(() => {
+                            if (confirm('Game Over! Play again?')) {
+                                resetGame();
+                            }
+                        }, 500);
+                    }
+                }
+            });
+
+            // Player-Powerup collisions
+            powerups.forEach((powerup, index) => {
+                if (playerPos.x < powerup.x + 20 &&
+                    playerPos.x + 40 > powerup.x &&
+                    playerPos.y < powerup.y + 20 &&
+                    playerPos.y + 40 > powerup.y) {
+                    
+                    health = Math.min(100, health + 30);
+                    healthElement.textContent = Health: ${health};
+                    createSound(800, 0.2, 'sine', 0.1);
+                    game.removeChild(powerup.element);
+                    powerups.splice(index, 1);
+                }
+            });
+        }
+
+        function resetGame() {
+            score = 0;
+            level = 1;
+            health = 100;
+            enemySpawnRate = 1500;
+            scoreElement.textContent = Score: ${score};
+            levelElement.textContent = Level: ${level};
+            healthElement.textContent = Health: ${health};
+            
+            // Clear all existing elements
+            bullets.forEach(bullet => game.removeChild(bullet.element));
+            enemies.forEach(enemy => game.removeChild(enemy.element));
+            powerups.forEach(powerup => game.removeChild(powerup.element));
+            
+            bullets = [];
+            enemies = [];
+            powerups = [];
+            playerPos = { x: 380, y: 500 };
+            
+            if (!gameLoop) {
+                gameLoop = setInterval(update, 1000/60);
+            }
+        }
+
+        function update() {
+            // Player movement
+            if (keys['ArrowLeft']) playerPos.x = Math.max(0, playerPos.x - 5);
+            if (keys['ArrowRight']) playerPos.x = Math.min(760, playerPos.x + 5);
+            if (keys['ArrowUp']) playerPos.y = Math.max(0, playerPos.y - 5);
+            if (keys['ArrowDown']) playerPos.y = Math.min(560, playerPos.y + 5);
+            
+            player.style.left = playerPos.x + 'px';
+            player.style.top = playerPos.y + 'px';
+
+            // Bullet movement
+            bullets.forEach((bullet, index) => {
+                bullet.y -= 7;
+                bullet.element.style.top = bullet.y + 'px';
+                if (bullet.y < -10) {
+                    game.removeChild(bullet.element);
+                    bullets.splice(index, 1);
+                }
+            });
+
+            // Enemy movement
+            enemies.forEach((enemy, index) => {
+                enemy.y += 2 + level * 0.5;
+                enemy.element.style.top = enemy.y + 'px';
+                if (enemy.y > 600) {
+                    game.removeChild(enemy.element);
+                    enemies.splice(index, 1);
+                }
+            });
+
+            // Spawn enemies
+            if (Date.now() - lastEnemySpawn > enemySpawnRate) {
+                createEnemy();
+                lastEnemySpawn = Date.now();
+            }
+
+            // Spawn powerups
+            if (Date.now() - lastPowerupSpawn > powerupSpawnRate) {
+                createPowerup();
+                lastPowerupSpawn = Date.now();
+            }
+
+            checkCollisions();
+        }
+
+        // Start the game
+        resetGame();
+    </script>
+</body>
+</html>

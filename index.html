@@ -206,7 +206,7 @@
 
         function nextLevel() {
             level++;
-            levelElement.textContent = Level: ${level};
+            levelElement.textContent = `Level: ${level}`;
             enemySpawnRate = Math.max(500, 1500 - level * 100);
             createSound(600, 0.5, 'sine', 0.2);
             
@@ -221,7 +221,7 @@
             // Reset player position
             playerPos = { x: 380, y: 500 };
             health = 100;
-            healthElement.textContent = Health: ${health};
+            healthElement.textContent = `Health: ${health}`;
         }
 
         function checkCollisions() {
@@ -239,7 +239,7 @@
                             game.removeChild(enemy.element);
                             enemies.splice(enemyIndex, 1);
                             score += 100;
-                            scoreElement.textContent = Score: ${score};
+                            scoreElement.textContent = `Score: ${score}`;
                         }
                         
                         game.removeChild(bullet.element);
@@ -261,7 +261,7 @@
                     playerPos.y + 40 > enemy.y) {
                     
                     health -= 20;
-                    healthElement.textContent = Health: ${health};
+                    healthElement.textContent = `Health: ${health}`;
                     createExplosion(enemy.x, enemy.y);
                     game.removeChild(enemy.element);
                     enemies.splice(index, 1);
@@ -285,7 +285,7 @@
                     playerPos.y + 40 > powerup.y) {
                     
                     health = Math.min(100, health + 30);
-                    healthElement.textContent = Health: ${health};
+                    healthElement.textContent = `Health: ${health}`;
                     createSound(800, 0.2, 'sine', 0.1);
                     game.removeChild(powerup.element);
                     powerups.splice(index, 1);
@@ -298,9 +298,9 @@
             level = 1;
             health = 100;
             enemySpawnRate = 1500;
-            scoreElement.textContent = Score: ${score};
-            levelElement.textContent = Level: ${level};
-            healthElement.textContent = Health: ${health};
+            scoreElement.textContent = `Score: ${score}`;
+            levelElement.textContent = `Level: ${level}`;
+            healthElement.textContent = `Health: ${health}`;
             
             // Clear all existing elements
             bullets.forEach(bullet => game.removeChild(bullet.element));
